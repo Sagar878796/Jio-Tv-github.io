@@ -627,6 +627,46 @@
       0% { transform: translateX(-100%); }
       100% { transform: translateX(100%); }
     }
+
+    /* Diagnostic Error Overlay */
+    .error-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .player-overlay.has-error .error-overlay {
+      display: flex;
+    }
+
+    .debug-box {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2rem;
+      border: 1px solid rgba(255, 0, 0, 0.3);
+      border-radius: var(--radius-lg);
+      text-align: center;
+      max-width: 400px;
+    }
+
+    .debug-box i {
+      font-size: 3rem;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    .debug-box h3 {
+      margin-bottom: 0.5rem;
+    }
+
+    .debug-box p {
+      color: var(--text-dim);
+      margin-bottom: 1.5rem;
+    }
   </style>
 </head>
 
@@ -924,6 +964,7 @@
 
     async function playStream(channel) {
       if (!channel) return;
+      playerOverlay.classList.remove('has-error');
       playerOverlay.classList.add('active');
       playingLogo.src = channel.logo;
       playingTitle.textContent = channel.name;
@@ -931,17 +972,18 @@
       player.appData_channel = channel;
 
       let streamUrl = channel.mpd;
-
-      // PC Playback Bypass: Handle forbidden headers for desktop browsers
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      // On PC, we try multiple injection patterns to bypass header restrictions
       if (!isMobile && (channel.userAgent || channel.referer)) {
-        console.log('Applying PC Header Bypass...');
         const headers = [];
         if (channel.userAgent) headers.push(`User-Agent:${channel.userAgent}`);
         if (channel.referer) headers.push(`Referer:${channel.referer}`);
+        const headerStr = headers.join('|');
         
         const sep = streamUrl.includes('?') ? '&' : '?';
-        streamUrl += `${sep}headers=${encodeURIComponent(headers.join('|'))}`;
+        // Try multiple formats (some proxies use one, some the other)
+        streamUrl += `${sep}headers=${encodeURIComponent(headerStr)}&ua=${encodeURIComponent(channel.userAgent || '')}&ref=${encodeURIComponent(channel.referer || '')}`;
       }
 
       player.configure({
@@ -955,9 +997,29 @@
         await player.load(streamUrl);
         videoElement.play();
         updateFavBtnState(channel.id);
+        playerOverlay.classList.remove('has-error');
       } catch (e) {
         console.error('Speed load failed:', e);
+        playerOverlay.classList.add('has-error');
+        const errorInfo = document.getElementById('errorInfo') || createErrorInfo();
+        errorInfo.innerHTML = `
+          <div class="debug-box">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h3>Playback Failed</h3>
+            <p>Code: <strong>${e.code}</strong> | Category: <strong>${e.category}</strong></p>
+            <p><small>${e.message || 'Check your internet or DRM support'}</small></p>
+            <button onclick="playStream(player.appData_channel)" class="btn-reconnect">Try Again</button>
+          </div>
+        `;
       }
+    }
+
+    function createErrorInfo() {
+      const div = document.createElement('div');
+      div.id = 'errorInfo';
+      div.className = 'error-overlay';
+      videoContainer.appendChild(div);
+      return div;
     }
 
     // --- UI/Navigation Logic ---
