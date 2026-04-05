@@ -822,7 +822,7 @@
 
     async function initApp() {
       try {
-        const response = await fetch('https://raw.githubusercontent.com/fakeall12398-sketch/JIO_TV/refs/heads/main/kid.json');
+        const response = await fetch('https://raw.githubusercontent.com/Sagar878796/Newk/refs/heads/main/data.json');
         const data = await response.json();
         
         allChannels = data.filter(c => c.mpd).map(c => ({
